@@ -362,6 +362,51 @@ jobs:
       - revert-migrations:
             id: ${CIRCLE_WORKFLOW_ID:0:7} 
 
+  cloudfront-update:
+    docker:
+      - image: amazon/aws-cli
+    steps:
+      - checkout
+      - run:
+          name: Install tar utility
+          command: |
+            yum install -y tar gzip
+      - attach_workspace:
+          at: ~/
+      - restore_cache:
+          keys: [backend-build]
+      - run:
+          name: Install python
+          command: | 
+              yum install python37 -y 
+      - run:
+          name: Install ansible
+          command: |  
+            curl https://bootstrap.pypa.io/pip/2.7/get-pip.py -o get-pip.py
+            python get-pip.py --user
+            python -m pip install --user ansible
+      - run:
+          name: Install node and npm
+          command: |
+            curl -sL https://rpm.nodesource.com/setup_10.x |  bash -
+            yum install nodejs -y
+            node --version
+            npm --version
+      - run:
+          name: Update cloudfront distribution
+          command: |
+            aws cloudformation deploy \
+            --template-file .circleci/files/cloudfront.yml \
+            --stack-name InitialStack \
+            --parameter-overrides WorkflowID="${CIRCLE_WORKFLOW_ID:0:7}" \
+            --tags project=udapeople
+
+      - destroy-environment:
+          id: ${CIRCLE_WORKFLOW_ID:0:7} 
+
+      - revert-migrations:
+            id: ${CIRCLE_WORKFLOW_ID:0:7}
+
 workflows:
   default:
     jobs:
@@ -387,3 +432,5 @@ workflows:
           requires: [run-migrations]
       - smoke-test:
           requires: [deploy-backend, deploy-frontend]
+      - cloudfront-update:
+          requires: [smoke-test]
